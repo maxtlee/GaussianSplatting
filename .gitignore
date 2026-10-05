@@ -1,0 +1,17 @@
+# Virtual environments
+.venv/
+venv/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Generated outputs
+experiments/
+outputs/
+*.mp4
+
+# OS
+.DS_Store

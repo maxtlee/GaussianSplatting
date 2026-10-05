@@ -1,0 +1,6 @@
+# Portable GPU build: installs the default CUDA wheel for the platform.
+# On Pascal (sm_61) cards use requirements-cu126.txt instead.
+torch>=2.4
+numpy>=1.26
+pillow>=10.0
+matplotlib>=3.8
