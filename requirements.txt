@@ -1,6 +1,15 @@
-# Portable GPU build: installs the default CUDA wheel for the platform.
-# On Pascal (sm_61) cards use requirements-cu126.txt instead.
+# Portable Python dependencies.
+#
+# `pip install -r requirements.txt` installs the PyTorch build for your platform
+# (CUDA on Linux/Windows GPUs, Apple MPS on macOS, CPU otherwise) plus small
+# support libraries. See the README "GPU notes" if you need a specific CUDA
+# build; Pascal cards (e.g. GTX 1050 Ti) should use requirements-cu126.txt.
+#
+# Developed on Python 3.14; anything 3.10+ should work.
+
 torch>=2.4
-numpy>=1.26
-pillow>=10.0
-matplotlib>=3.8
+torchvision>=0.19
+numpy==2.5.3
+pillow==12.3.0
+matplotlib==3.11.2
+tqdm==4.70.1

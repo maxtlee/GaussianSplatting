@@ -1,8 +1,19 @@
-# CUDA 12.6 build for older NVIDIA cards (Pascal sm_61 and up).
-# The default +cu130 wheel dropped Pascal and fails with "no kernel image".
+# Exact environment used on the development machine (GTX 1050 Ti, sm_61).
+#
+# The default PyPI torch wheel is +cu130, which dropped Pascal and fails with
+# "no kernel image is available for execution on the device". The CUDA 12.6
+# build ships sm_60 kernels, binary-compatible with sm_61.
+#
+# Pin the +cu126 local version explicitly: a plain `torch==2.14.0` spec also
+# matches the PyPI +cu130 local version, so pip may install the wrong build.
+#
+# Use this file instead of requirements.txt on Pascal cards:
+#   pip install -r requirements-cu126.txt
+
 --extra-index-url https://download.pytorch.org/whl/cu126
-torch==2.14.0
-torchvision==0.29.0
+torch==2.14.0+cu126
+torchvision==0.29.0+cu126
 numpy==2.5.3
 pillow==12.3.0
 matplotlib==3.11.2
+tqdm==4.70.1
