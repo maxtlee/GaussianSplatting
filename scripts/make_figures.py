@@ -91,26 +91,25 @@ def figure_training_curves(runs):
 
 
 def figure_3d():
-    fixed_p = EXP / "3d" / "fixed" / "metrics.json"
-    dens_p = EXP / "3d" / "densified" / "metrics.json"
-    if not fixed_p.exists() or not dens_p.exists():
+    runs = []
+    for p in sorted((EXP / "3d").glob("*/metrics.json")):
+        m = json.loads(p.read_text())
+        runs.append((p.parent.name, m))
+    if not runs:
         print("3D metrics not ready; skipping")
         return
-    fixed = json.loads(fixed_p.read_text())
-    dens = json.loads(dens_p.read_text())
-    labels = ["fixed", "densified"]
-    train = [fixed["train_psnr_mean"], dens["train_psnr_mean"]]
-    val = [fixed["val_psnr_mean"], dens["val_psnr_mean"]]
-    x = range(len(labels))
-    fig, ax = plt.subplots(figsize=(5.0, 4.0))
+    labels = [f"{tag}\nN={m['final_n']}" for tag, m in runs]
+    train = [m["train_psnr_mean"] for _, m in runs]
+    val = [m["val_psnr_mean"] for _, m in runs]
+    x = range(len(runs))
+    fig, ax = plt.subplots(figsize=(6.4, 4.0))
     ax.bar([i - 0.18 for i in x], train, width=0.34, label="training", color="#2f6db3")
     ax.bar([i + 0.18 for i in x], val, width=0.34, label="held-out", color="#c45a2a")
     for i, (t, v) in enumerate(zip(train, val)):
-        ax.text(i - 0.18, t + 0.3, f"{t:.1f}", ha="center", fontsize=8)
-        ax.text(i + 0.18, v + 0.3, f"{v:.1f}", ha="center", fontsize=8)
+        ax.text(i - 0.18, t + 0.25, f"{t:.1f}", ha="center", fontsize=8)
+        ax.text(i + 0.18, v + 0.25, f"{v:.1f}", ha="center", fontsize=8)
     ax.set_xticks(list(x))
-    ax.set_xticklabels([f"{l}\nN={fixed['final_n'] if l=='fixed' else dens['final_n']}"
-                        for l in labels])
+    ax.set_xticklabels(labels, fontsize=8)
     ax.set_ylabel("PSNR (dB)")
     ax.set_title("3D reconstruction: fixed vs. densified")
     ax.legend()

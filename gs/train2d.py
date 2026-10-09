@@ -81,7 +81,9 @@ def fit_2d(
             r_lo, r_hi = lo // W, (hi - 1) // W
             C = render_chunk_2d(coords[lo:hi], r_lo + 0.5, r_hi + 0.5, cloud)
             mse = ((C - tgt[lo:hi]) ** 2).mean()
-            (mse * (hi - lo) / P).backward()
+            term = mse * (hi - lo) / P
+            if term.requires_grad:  # empty bands contribute no gradient
+                term.backward()
             loss += float(mse.detach()) * (hi - lo) / P
 
         grad_sum += cloud.mu.grad.detach().norm(dim=1)

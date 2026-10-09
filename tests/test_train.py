@@ -60,6 +60,18 @@ def test_3d_gradients_flow():
         assert p.grad is not None and torch.isfinite(p.grad).all()
 
 
+def test_fit_handles_empty_bands():
+    # A row with no Gaussian support renders black and must not break backward.
+    target = torch.zeros(16, 16, 3)
+    cloud, _ = fit_2d(target, n=4, steps=6, device="cpu", chunk=16, log_every=0)
+    assert cloud.n == 4
+
+    K = torch.tensor([[10.0, 0.0, 8.0], [0.0, 10.0, 8.0], [0.0, 0.0, 1.0]])
+    cam = Camera(torch.eye(3), torch.tensor([0.0, 0.0, 4.0]), K, target)
+    cloud3, _ = fit_3d([cam], n=4, steps=6, device="cpu", band=16, log_every=0)
+    assert cloud3.n == 4
+
+
 def test_3d_fit_runs():
     K = torch.tensor([[10.0, 0.0, 8.0], [0.0, 10.0, 8.0], [0.0, 0.0, 1.0]])
     img = torch.zeros(16, 16, 3)

@@ -80,7 +80,7 @@ def main():
                 every=200,
                 budget=args.densify_budget,
                 start=args.densify_start,
-                top_fraction=0.10,
+                top_fraction=0.25,
                 size_threshold=0.02 * 256,
                 until=int(args.steps * 0.8),
             )

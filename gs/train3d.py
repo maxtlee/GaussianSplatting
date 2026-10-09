@@ -56,7 +56,8 @@ def fit_3d(
         band = auto_band(H, W, peak)
     opt = AdamStore(cloud.params(), lr=lr)
     xy = pixel_grid(H, W, device=device)
-    gen = torch.Generator(device=device).manual_seed(cam_seed)
+    # torch.randint samples the camera index on the host regardless of device.
+    gen = torch.Generator().manual_seed(cam_seed)
 
     history = []
     grad_sum = torch.zeros(cloud.n, device=device)
@@ -73,7 +74,9 @@ def fit_3d(
             r_lo, r_hi = lo // W, (hi - 1) // W
             C = render_chunk_3d(xy[lo:hi], r_lo + 0.5, r_hi + 0.5, cloud, cam)
             mse = ((C - tgt[lo:hi]) ** 2).mean()
-            (mse * (hi - lo) / P).backward()
+            term = mse * (hi - lo) / P
+            if term.requires_grad:  # empty bands contribute no gradient
+                term.backward()
             loss += float(mse.detach()) * (hi - lo) / P
 
         grad_sum += cloud.mu.grad.detach().norm(dim=1)

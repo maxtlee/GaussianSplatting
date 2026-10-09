@@ -88,16 +88,50 @@ intrinsics `K` is shared by every view (`fx = K[0][0]`, `fy = K[1][1]`,
   python scripts/check_env.py
   ```
 
-Renderer, training, densification, and the 2D/3D run scripts are being built out;
-the entry points will be listed here as they land.
+- **2D study.** Fits each target at `N = 256, 1024, 4096` and runs an adaptive
+  densification schedule, writing one directory per run under `experiments/2d/`.
+  It is resumable (existing `metrics.json` files are reused), so it can be
+  interrupted and restarted:
+  ```bash
+  python scripts/run_2d_suite.py --steps 2000
+  ```
+
+- **3D scene.** Train a fixed cloud, then a densified one:
+  ```bash
+  python scripts/run_3d.py --tag fixed    --n 4000 --steps 1500
+  python scripts/run_3d.py --tag densified --densify --start 1000 --budget 4000 --steps 1500
+  ```
+  Each writes `experiments/3d/<tag>/`: metrics, target/render comparisons for
+  training and held-out views, and a 24-frame novel orbit (`orbit/` PNGs plus
+  `orbit.mp4`).
+
+- **Figures.** Build the report figures from the saved metrics:
+  ```bash
+  python scripts/make_figures.py
+  ```
+
+- **On the development GPU.** The GTX 1050 Ti has 4 GB, so rendering runs in
+  horizontal bands and evaluates only the Gaussians whose support reaches each
+  band. Set `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True` to reduce
+  allocator fragmentation on the longer runs.
 
 ## Layout
 
 ```
-gs/           library: device selection, image IO, metrics (renderer/trainer to come)
-scripts/      runnable entry points
-tests/        self-contained checks
-assets/       sample images and the posed sphere scene
+gs/gaussians2d.py   covariance from scale/rotation, gaussian weight, 2D cloud
+gs/gaussians3d.py   quaternion rotation, 3D covariance, pinhole projection
+gs/raster.py        banded differentiable alpha compositing (2D and 3D)
+gs/densify.py       adaptive clone / split / prune, resizable optimizer state
+gs/optim.py         Adam with resizable per-Gaussian moments
+gs/train2d.py       fit_2d and PSNR from the exact full-image MSE
+gs/train3d.py       fit_3d and multi-view evaluation
+gs/data.py          targets and posed cameras
+gs/io.py metrics.py device.py viz.py   image IO, MSE/PSNR, device, figures
+scripts/            runnable entry points
+tests/              self-contained checks
+assets/             sample images and the posed sphere scene
+writeup/            report, figures, and the novel-view orbit
+experiments/        generated renders and metrics (not committed)
 ```
 
 ## Tests
@@ -107,4 +141,9 @@ Each test file runs on its own:
 ```bash
 python tests/test_io.py
 python tests/test_metrics.py
+python tests/test_gaussians2d.py
+python tests/test_gaussians3d.py
+python tests/test_raster.py
+python tests/test_optim.py
+python tests/test_train.py
 ```
