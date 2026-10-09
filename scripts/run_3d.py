@@ -9,6 +9,7 @@ resumable: an existing ``metrics.json`` is reused unless ``--force``.
 
 import argparse
 import json
+import math
 import subprocess
 import sys
 import time
@@ -33,9 +34,9 @@ def look_at(eye, target, K, image, up=(0.0, 1.0, 0.0)):
     up = torch.as_tensor(up, dtype=torch.float32, device=dev)
     z = target - eye
     z = z / z.norm()
-    x = torch.cross(z, up)
+    x = torch.linalg.cross(z, up)
     x = x / x.norm()
-    y = torch.cross(z, x)
+    y = torch.linalg.cross(z, x)
     R = torch.stack([x, y, z], dim=0)
     t = -(R @ eye)
     return Camera(R, t, K, image)
@@ -43,13 +44,13 @@ def look_at(eye, target, K, image, up=(0.0, 1.0, 0.0)):
 
 def orbit_cameras(K, image, n=24, radius=4.0, elevation_deg=20.0):
     cams = []
-    el = torch.deg2rad(torch.tensor(elevation_deg, dtype=torch.float32))
+    el = math.radians(elevation_deg)
     for i in range(n):
-        az = 2 * torch.pi * i / n
+        az = 2 * math.pi * i / n
         eye = [
-            float(radius * torch.cos(el) * torch.cos(az)),
-            float(radius * torch.sin(el)),
-            float(radius * torch.cos(el) * torch.sin(az)),
+            radius * math.cos(el) * math.cos(az),
+            radius * math.sin(el),
+            radius * math.cos(el) * math.sin(az),
         ]
         cams.append(look_at(eye, [0.0, 0.0, 0.0], K, image))
     return cams
@@ -87,6 +88,7 @@ def main():
         "--size-threshold", type=float, default=0.01, help="world units"
     )
     ap.add_argument("--out", default=str(ROOT / "experiments" / "3d"))
+    ap.add_argument("--device", default="auto", choices=["auto", "cuda", "cpu"])
     ap.add_argument("--force", action="store_true")
     args = ap.parse_args()
 
@@ -97,7 +99,10 @@ def main():
         print(f"[skip] {metrics_path}")
         return
 
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    if args.device == "auto":
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+    else:
+        device = args.device
     train, val, K, W, H = load_spheres(device=device)
     K = K.to(device)
 

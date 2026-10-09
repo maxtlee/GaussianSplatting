@@ -79,7 +79,8 @@ def fit_3d(
                 term.backward()
             loss += float(mse.detach()) * (hi - lo) / P
 
-        grad_sum += cloud.mu.grad.detach().norm(dim=1)
+        if cloud.mu.grad is not None:  # no gradient if every band was empty
+            grad_sum += cloud.mu.grad.detach().norm(dim=1)
         since += 1
         opt.step(cloud.params())
 
