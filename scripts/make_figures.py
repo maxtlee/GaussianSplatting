@@ -119,6 +119,30 @@ def figure_3d():
     plt.close(fig)
 
 
+def figure_3d_curve():
+    p = EXP / "3d" / "curve_long" / "metrics.json"
+    if not p.exists():
+        print("no 3D curve run yet")
+        return
+    m = json.loads(p.read_text())
+    h = [e for e in m["history"] if "train" in e]
+    if not h:
+        return
+    steps = [e["step"] for e in h]
+    fig, ax = plt.subplots(figsize=(6.2, 4.0))
+    ax.plot(steps, [e["train"] for e in h], "-o", markersize=3, label="training views")
+    ax.plot(steps, [e["val"] for e in h], "-s", markersize=3, label="held-out views")
+    ax.set_xlabel("optimization step")
+    ax.set_ylabel("PSNR (dB)")
+    ax.set_title(f"3D PSNR over training (N={m['final_n']})")
+    ax.grid(True, alpha=0.3)
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig(ASSETS / "3d_training_curve.png", dpi=160)
+    plt.close(fig)
+    print("wrote", ASSETS / "3d_training_curve.png")
+
+
 def main():
     runs = load_2d()
     if runs:
@@ -128,6 +152,7 @@ def main():
     else:
         print("no 2D metrics yet")
     figure_3d()
+    figure_3d_curve()
     print("figures written to", ASSETS)
 
 

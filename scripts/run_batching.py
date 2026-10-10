@@ -39,11 +39,11 @@ def main():
     # --- 2D: coffee at N=2048, varying band height --------------------------
     target = load_target("coffee")
     H, W = target.shape[:2]
-    print("=== 2D (coffee, N=2048, 600 steps) ===")
-    for rows in (1, 2, 4, 8, 16, 32, 256):
+    print("=== 2D (coffee, N=1024, 400 steps) ===")
+    for rows in (2, 4, 8, 16, 32, 64, 256):
         t0 = time.time()
         cloud, _ = fit_2d(
-            target, n=2048, steps=600, seed=0, device=device,
+            target, n=1024, steps=400, seed=0, device=device,
             chunk=rows * W, log_every=0,
         )
         _, psnr = render_psnr(cloud, target)
@@ -54,11 +54,11 @@ def main():
 
     # --- 3D: sphere scene at N=2000, varying band height --------------------
     train, val, K, W3, H3 = load_spheres(device=device)
-    print("=== 3D (spheres, N=2000, 800 steps) ===")
+    print("=== 3D (spheres, N=1000, 400 steps) ===")
     for rows in (4, 8, 16, 32, 64, 160):
         t0 = time.time()
         cloud, _ = fit_3d(
-            train, n=2000, steps=800, seed=0, device=device,
+            train, n=1000, steps=400, seed=0, device=device,
             band=rows * W3, log_every=0,
         )
         tr, _ = evaluate(cloud, train)
@@ -72,7 +72,7 @@ def main():
     # --- cutoff: run with no local truncation -------------------------------
     print("=== cutoff check (3D, band=16 rows) ===")
     cloud, _ = fit_3d(
-        train, n=2000, steps=800, seed=0, device=device, band=16 * W3,
+        train, n=1000, steps=400, seed=0, device=device, band=16 * W3,
         log_every=0, cutoff=100.0,
     )
     tr, _ = evaluate(cloud, train, cutoff=100.0)
