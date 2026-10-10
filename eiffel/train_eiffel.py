@@ -144,7 +144,12 @@ def train(args):
         P = H * W
         xy = pixel_grid(H, W, device=device)
         tgt = cam.image.reshape(-1, 3)
-        band = args.band or auto_band(H, W, cloud.n)
+        if args.band:
+            band = args.band
+        else:
+            # A fixed number of bands keeps the Python/kernel overhead bounded
+            # for large clouds, where the auto formula would pick one row.
+            band = max(W, (H // args.bands) * W)
 
         opt.zero_grad(cloud.params())
         if app_opt is not None:
@@ -169,7 +174,7 @@ def train(args):
             app_opt.step()
 
         if step % args.eval_every == 0 or step == args.steps - 1:
-            tr = evaluate(train_cams, use_appearance=False)
+            tr = evaluate(train_cams[::4], use_appearance=False)
             va = evaluate(val_cams, use_appearance=False)
             history.append({"step": step, "n": cloud.n, "loss": total,
                             "train_psnr": tr, "val_psnr": va})
@@ -214,6 +219,8 @@ def main():
     ap.add_argument("--appearance", choices=["none", "train"], default="none")
     ap.add_argument("--loss", choices=["mse", "huber"], default="mse")
     ap.add_argument("--band", type=int, default=0)
+    ap.add_argument("--bands", type=int, default=16,
+                    help="number of horizontal bands per image (when --band=0)")
     ap.add_argument("--eval-every", type=int, default=250)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--densify", action="store_true")
