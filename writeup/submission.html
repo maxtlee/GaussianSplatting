@@ -323,11 +323,9 @@ here is the end-to-end real-world pipeline and the compensation study.</p>
 <ul>
   <li>The rasterizer and representation are compact and fully differentiable;
   quality scales smoothly with the number of Gaussians.</li>
-  <li>Densification is a clear win in 2D at equal count but did not improve
-  held-out quality in the tested 3D scene.</li>
-  <li>The 3D reconstructions are soft because of the global depth order and
-  random initialization; these are the main simplifications versus full 3DGS.</li>
-  <li>Batching is a pure memory optimization: identical results across band
+  <li>Densification is a clear win in 2D at equal count but did worsened
+  overfitting issues in the tested 3D scene.</li>
+  <li>Batching as a memory optimization does not effect the final result: identical results across band
   sizes, and the unbanded variant does not fit in 4 GB.</li>
 </ul>
 
