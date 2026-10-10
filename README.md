@@ -130,9 +130,31 @@ gs/io.py metrics.py device.py viz.py   image IO, MSE/PSNR, device, figures
 scripts/            runnable entry points
 tests/              self-contained checks
 assets/             sample images and the posed sphere scene
-writeup/            report, figures, and the novel-view orbit
+writeup/            reports (progression + submission), figures, orbits
+eiffel/             extension: scrape, SfM, and 3DGS on real photos
 experiments/        generated renders and metrics (not committed)
 ```
+
+## Writeups
+
+- **Progression notes** — a self-contained walkthrough for a general audience:
+  [HTML](writeup/progression.html) · [PDF](writeup/progression.pdf)
+- **Submission** — organised by problem, with the required answers plus the
+  extra experiments: [HTML](writeup/submission.html) ·
+  [PDF](writeup/submission.pdf)
+- Rebuild the PDFs: `pip install -r requirements-docs.txt && python scripts/build_writeup.py`
+
+## Experiments beyond the basics
+
+- **Batching validation** (`scripts/run_batching.py`): retrains the same model
+  at several band heights and with the local-support cutoff disabled, showing
+  the memory batching does not change the result (and that the unbanded variant
+  does not fit in 4 GB).
+- **Training curves** (`scripts/run_3d.py --eval-every N`): train and held-out
+  PSNR over 4000 steps, showing the held-out plateau.
+- **Eiffel Tower extension** (`eiffel/`): 320 scraped Wikimedia Commons photos,
+  COLMAP structure-from-motion, RANSAC viewpoint selection, and lighting
+  compensation before and during training. See [eiffel/README.md](eiffel/README.md).
 
 ## Tests
 

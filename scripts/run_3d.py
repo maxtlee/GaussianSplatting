@@ -125,7 +125,11 @@ def main():
         )
 
     t0 = time.time()
-    eval_sets = {"train": train, "val": val} if args.eval_every else None
+    # Evaluate on a spatial subset so periodic evaluation stays cheap; the
+    # final numbers still use every view.
+    eval_sets = (
+        {"train": train[::6], "val": val[::3]} if args.eval_every else None
+    )
     cloud, history = fit_3d(
         train,
         n=args.n,
@@ -136,6 +140,7 @@ def main():
         log_every=50,
         eval_every=args.eval_every,
         eval_sets=eval_sets,
+        verbose=bool(args.eval_every),
     )
     train_psnr, _ = evaluate(cloud, train)
     val_psnr, val_imgs = evaluate(cloud, val, return_images=True)

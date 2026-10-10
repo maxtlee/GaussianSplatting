@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Gaussian Splatting — progression notes</title>
+<style>
+  @page { size: letter; margin: 2.0cm 1.8cm; }
+  body { font-family: "DejaVu Serif", Georgia, serif; font-size: 10.5pt;
+         line-height: 1.45; color: #16181d; }
+  h1 { font-size: 19pt; margin: 0 0 2pt 0; }
+  h2 { font-size: 13.5pt; margin: 18pt 0 4pt 0; border-bottom: 1px solid #bbb;
+       padding-bottom: 2pt; }
+  h3 { font-size: 11.5pt; margin: 12pt 0 3pt 0; }
+  p, li { margin: 4pt 0; }
+  code, .mono { font-family: "DejaVu Sans Mono", monospace; font-size: 9pt; }
+  table { border-collapse: collapse; margin: 6pt 0; font-size: 9.5pt; }
+  th, td { border: 1px solid #c8ccd2; padding: 3pt 7pt; text-align: center; }
+  th { background: #eef1f4; }
+  figcaption { font-size: 8.5pt; color: #555; text-align: center;
+               margin-top: 2pt; }
+  img { max-width: 100%; }
+  figure { margin: 8pt 0; }
+  .note { background: #f6f7f9; border-left: 3px solid #99a; padding: 5pt 9pt;
+          margin: 7pt 0; font-size: 9.5pt; }
+  .log { font-size: 9.5pt; }
+</style>
+</head>
+<body>
+
+<h1>Gaussian Splatting — progression notes</h1>
+<p>A from-scratch PyTorch implementation of Gaussian Splatting for 2D images and
+3D scenes, plus an extension reconstructing the Eiffel Tower from internet
+photos. Code and instructions:
+<span class="mono">github.com/maxtlee/GaussianSplatting</span>.</p>
+
+<h2>What this is</h2>
+<p>Classical image representations store pixels. Gaussian Splatting stores a
+cloud of translucent 3D blobs instead: each has a position, a shape, a color,
+and an opacity, and a renderer projects them onto the image plane and blends
+them front to back. Because every step is differentiable, a rough cloud can be
+optimized directly against reference images until it reproduces them. This
+project builds that pipeline from scratch: first in 2D (fit one image), then in
+3D (reconstruct a scene from posed photos), and finally on a real, messy
+photograph set.</p>
+
+<h2>The representation</h2>
+<p>A 2D Gaussian is a center &mu;, a covariance &Sigma;, a color <i>c</i>, and an
+opacity &alpha;. Optimizing the four numbers of a 2&times;2 covariance directly
+is dangerous — most matrices are not valid covariances — so &Sigma; is built
+from a scale and a rotation, <i>&Sigma; = R S S<sup>T</sup> R<sup>T</sup></i>,
+which is positive semi-definite by construction. The weight a Gaussian puts on a
+pixel is its value under the Gaussian density,
+<i>w(x) = exp(&minus;&frac12; (x&minus;&mu;)<sup>T</sup>&Sigma;<sup>&minus;1</sup>(x&minus;&mu;))</i>,
+and its alpha there is <i>opacity &middot; w</i>. In 3D the only changes are one
+more position and scale axis, a rotation stored as a unit quaternion, and a
+projection step (below).</p>
+
+<h2>Rendering</h2>
+<p>To render, the Gaussians are sorted front to back and composited with the
+"over" operator, <i>C = &sum;<sub>i</sub> c<sub>i</sub>&alpha;<sub>i</sub>T<sub>i</sub></i>
+with <i>T<sub>i</sub> = &prod;<sub>j&lt;i</sub>(1&minus;&alpha;<sub>j</sub>)</i>,
+over a black background. The trick that makes this fast enough in PyTorch is to
+never loop over Gaussians: the transmittance <i>T</i> is the exclusive prefix
+product of <i>(1&minus;&alpha;)</i> along the sorted axis (a single
+<span class="mono">cumprod</span>) and the color sum is one matrix multiply. The
+whole composite is a handful of vectorized operations, and gradients flow back
+to every position, scale, rotation, color, and opacity.</p>
+
+<h2>Fitting an image</h2>
+<p>Each of three 256&times;256 targets is fit independently with a fixed number
+of Gaussians, Adam at learning rate 1e-2 for 2000 steps, starting from a
+spread-out random initialization. PSNR is read directly off the exact full-image
+mean squared error.</p>
+
+<table>
+  <tr><th>target</th><th>N = 256</th><th>N = 1024</th><th>N = 4096</th>
+      <th>densified (N = 1024)</th></tr>
+  <tr><td>coffee</td><td>24.64</td><td>28.42</td><td>33.33</td><td>30.74</td></tr>
+  <tr><td>astronaut</td><td>19.98</td><td>24.20</td><td>31.09</td><td>24.54</td></tr>
+  <tr><td>cat</td><td>26.06</td><td>28.97</td><td>33.99</td><td>29.62</td></tr>
+</table>
+
+<figure>
+  <img src="assets/psnr_vs_count.png" alt="PSNR vs number of Gaussians">
+  <figcaption>Final PSNR against the number of Gaussians. Stars are densified
+  fits at their final count.</figcaption>
+</figure>
+
+<p>Every target improves with more Gaussians, but the ordering is not simply
+"busier image, more Gaussians". The <i>astronaut</i> needs the most capacity: it
+is the worst at 256 (19.98 dB) and gains the most by 4096 (+11.1 dB), because it
+is full of sharp, high-contrast structure — helmet edge, white suit against a
+dark background — and smooth blobs fit sharp edges worst. The <i>cat</i> is
+almost all high-frequency fur yet scores highest at low counts (26.06 dB),
+because dense texture has a small per-pixel amplitude around a dominant local
+color, which blobs approximate well even when the fine detail is blurred.
+Structure (edges and contrast) matters as much as frequency content.</p>
+
+<h2>Growing the cloud</h2>
+<p>A fixed cloud spends the same capacity everywhere. Densification grows it
+adaptively: every 200 steps each Gaussian is scored by the mean magnitude of the
+loss gradient with respect to its position since the last pass, and the top
+fraction is densified — a small under-fit Gaussian is cloned in place, a large
+one is split into two children offset along its major axis with scales divided
+by 1.6. Nearly transparent Gaussians are pruned and the count is capped at a
+budget. The optimizer's Adam moments are resized alongside the parameters
+(survivors keep theirs, new Gaussians start at zero).</p>
+
+<p>On <i>coffee</i>, growing 256 &rarr; 1024 reaches 30.74 dB versus 28.42 dB for
+a plain fixed fit at the same 1024. Densification beats the same-count fixed fit
+on all three targets: coffee +2.32 dB, cat +0.65 dB, astronaut +0.34 dB.</p>
+
+<figure>
+  <img src="assets/2d_coffee_densified.png" alt="densified coffee">
+  <figcaption>Densified coffee fit: target, render, amplified error
+  (30.74 dB at 1024 Gaussians).</figcaption>
+</figure>
+
+<h2>Going to 3D</h2>
+<p>Each 3D Gaussian is projected into a camera by sending its mean through a
+pinhole projection and its covariance through the projection's Jacobian
+<i>J</i> at the mean, <i>&Sigma;&prime; = J &Sigma;<sub>cam</sub> J<sup>T</sup></i>.
+That is the standard way to move a Gaussian through the nonlinear perspective
+divide, and it turns a 3D blob into a stretched 2D ellipse the 2D rasterizer can
+composite. Gaussians are sorted by camera-space depth <i>z<sub>c</sub></i>.</p>
+
+<p>On the synthetic sphere scene (44 training views, 12 held-out), a fixed cloud
+of 4000 Gaussians reaches 23.60 dB on the training views and 16.51 dB on the
+held-out ones. A 4000-step run (evaluating every 250 steps) traces the curves
+below: training PSNR climbs from 13.2 dB at initialization to 25.8 dB, while
+held-out PSNR rises to about 16.5 dB within the first few hundred steps and then
+stops improving — it even drifts down slightly. The gap is overfitting: the
+cloud keeps fitting the training views without learning the scene.</p>
+
+<figure>
+  <img src="assets/3d_training_curve.png" alt="3D PSNR over training">
+  <figcaption>Training and held-out PSNR over 4000 optimization steps
+  (N = 4000).</figcaption>
+</figure>
+
+<figure>
+  <img src="assets/3d_fixed_train000.png" alt="3D training view">
+  <figcaption>Training view 000: target, render, error. The render is
+  recognizable but soft — the per-camera global depth sort is an approximation
+  of the true per-pixel order, so overlapping semi-transparent primitives
+  blend.</figcaption>
+</figure>
+
+<h3>Densification in 3D</h3>
+<p>The same densification code runs in 3D with positions and scales in 3D, a
+quaternion rotation, a world-unit size threshold, and the position-gradient
+score accumulated over the sampled cameras. Here the honest result is negative:
+growing from 1000 to 2488 Gaussians reached a <b>higher training PSNR (23.99 vs
+23.24 dB)</b> but a <b>lower held-out PSNR (16.20 vs 16.77 dB)</b> than a fixed
+fit at the same count. The extra primitives improve the training views, floaters
+included, without generalizing — exactly the failure densification is meant to
+prevent, and pruning did not remove enough of them at this scale.</p>
+
+<figure>
+  <img src="assets/3d_fixed_vs_densified.png" alt="fixed vs densified">
+  <figcaption>Training and held-out PSNR for the fixed and densified sphere
+  fits.</figcaption>
+</figure>
+
+<h3>Novel views</h3>
+<p>Held-out PSNR (16.5 dB) is far below training PSNR (23.6 dB), so much of the
+fit is memorization. A 24-frame orbit renders consistently but softly: sphere
+silhouettes blur, contacts between spheres mush together, and the background fog
+drifts. This is the expected cost of a random (not structure-from-motion)
+initialization, a single global depth order, and view-independent color.</p>
+<figure>
+  <img src="assets/3d_orbit_strip.png" alt="novel orbit">
+  <figcaption>Six frames of a novel 24-view orbit (20&deg; elevation).</figcaption>
+</figure>
+
+<h2>Living in 4 GB: is the batching safe?</h2>
+<p>The development GPU has 4 GB of memory, which cannot hold the full
+<i>(pixels &times; Gaussians)</i> weight matrix (256&times;256 &times; 4096 is
+already &gt; 1 GB per tensor). The renderer therefore processes the image in
+horizontal bands and, within a band, evaluates only the Gaussians whose support
+reaches it. This is meant to be a pure memory optimization, so the trained
+result must not depend on the band size.</p>
+
+<p>It does not. Retraining the same model with band heights from 8 rows up to
+the whole image gives:</p>
+
+<table>
+  <tr><th>band (rows)</th><th>2D PSNR (coffee, N=1024)</th>
+      <th>3D train (spheres, N=1000)</th><th>3D held-out</th></tr>
+  <tr><td>8</td><td>23.1141</td><td>18.2650</td><td>16.3355</td></tr>
+  <tr><td>16</td><td>23.1130</td><td>18.2655</td><td>16.3351</td></tr>
+  <tr><td>32</td><td>23.1154</td><td>18.2657</td><td>16.3345</td></tr>
+  <tr><td>64</td><td>23.1156</td><td>18.2658</td><td>16.3347</td></tr>
+  <tr><td>whole image</td><td colspan="3">out of memory</td></tr>
+</table>
+
+<figure>
+  <img src="assets/batching.png" alt="batching invariance">
+  <figcaption>Final PSNR against band height. Flat within 0.003 dB; the
+  whole-image case does not fit.</figcaption>
+</figure>
+
+<p>The spread is 0.003 dB in 2D and 0.001 dB in 3D — floating-point noise. The
+whole-image 2D run runs out of memory, which is precisely why the bands exist.
+The local-support cutoff (a Gaussian is treated as zero beyond 3.5&sigma;) is
+also negligible: disabling it entirely changes the held-out PSNR by 0.0002 dB.
+So the batching is an implementation detail, not a modeling choice.</p>
+
+<h2>Extension: the Eiffel Tower</h2>
+<p>To test the pipeline on real data, 320 Eiffel Tower photographs were
+downloaded from Wikimedia Commons (freely licensed; authors credited in
+<span class="mono">eiffel/CREDITS.md</span>) and reconstructed with COLMAP. The
+photographs have unknown poses, mixed exposures and weather, and include
+off-topic or unusable frames — so the pipeline adds structure-from-motion, a
+RANSAC selection of the consistent camera ring, and lighting compensation both
+before and during training. <i>In progress — results and the orbit GIF will be
+added here once the reconstruction finishes.</i></p>
+
+<h2>Conclusions</h2>
+<ul>
+  <li>The representation and rasterizer are simple and fully differentiable;
+  quality scales smoothly with the number of Gaussians.</li>
+  <li>Densification helps a lot in 2D (+0.3 to +2.3 dB at equal count) but did
+  not improve held-out quality in this 3D scene — a useful negative result.</li>
+  <li>The 3D renders are soft; the main causes are the global depth order and
+  the random initialization, both simplifications relative to a full tiled
+  splatting rasterizer.</li>
+  <li>Memory banding is provably harmless: results are identical across band
+  sizes to within floating-point noise, and the unbanded variant does not fit.</li>
+</ul>
+
+<h2>Log</h2>
+<p class="log">
+<b>Day 1</b> — parsed the assignment, gathered the data, set up the CUDA 12.6
+environment (the dev GPU is an old Pascal card that the default CUDA 13 wheel no
+longer supports).<br>
+<b>Day 2</b> — implemented the 2D Gaussian, the compositing rasterizer with a
+<span class="mono">cumprod</span> prefix product, a resizable Adam, and the
+densification pass; fit the three targets.<br>
+<b>Day 3</b> — added 3D covariance from quaternions and the pinhole projection
+with its Jacobian; reconstructed the sphere scene; found and fixed two
+empty-band edge cases; ran the batching study and a 5000-step 3D run.<br>
+<b>Next</b> — the Eiffel Tower extension.
+</p>
+
+</body>
+</html>
