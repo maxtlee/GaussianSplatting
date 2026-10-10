@@ -13,5 +13,8 @@ experiments/
 outputs/
 *.mp4
 
+# Raw scraped data (images are credited in eiffel/CREDITS.md, not committed)
+eiffel/data/
+
 # OS
 .DS_Store
