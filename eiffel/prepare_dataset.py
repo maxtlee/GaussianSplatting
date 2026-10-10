@@ -91,8 +91,10 @@ def main():
     ap.add_argument("--normalize", action="store_true",
                     help="color-normalize all images to a shared target")
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--out", default=str(DATA / "processed"))
     ap.add_argument("--execute", action="store_true")
     args = ap.parse_args()
+    proc = Path(args.out)
 
     data = json.loads(SFM.read_text())
     frames = data["frames"]
@@ -134,7 +136,7 @@ def main():
         print("normalize:", args.normalize, "max_side:", args.max_side)
         return
 
-    img_dir = PROC / "images"
+    img_dir = proc / "images"
     img_dir.mkdir(parents=True, exist_ok=True)
     for i, (f, (mean, std)) in enumerate(zip(kept, stats)):
         img = Image.open(RAW / f["file"]).convert("RGB")
@@ -162,8 +164,8 @@ def main():
 
     points = np.array([p["xyz"] for p in data["points"]], dtype=np.float32)
     colors = np.array([p["rgb"] for p in data["points"]], dtype=np.float32) / 255.0
-    np.save(PROC / "points.npy", points)
-    np.save(PROC / "colors.npy", colors)
+    np.save(proc / "points.npy", points)
+    np.save(proc / "colors.npy", colors)
 
     meta = {
         "num_images": len(records),
@@ -177,7 +179,7 @@ def main():
         "extent": points.ptp(axis=0).tolist(),
         "center": points.mean(axis=0).tolist(),
     }
-    (PROC / "cameras.json").write_text(json.dumps({"frames": records, "meta": meta},
+    (proc / "cameras.json").write_text(json.dumps({"frames": records, "meta": meta},
                                                   indent=2))
     print(f"wrote {len(records)} images to {img_dir}")
     print(json.dumps(meta, indent=2))
