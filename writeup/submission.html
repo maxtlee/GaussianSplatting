@@ -28,10 +28,7 @@
 
 <h1>Gaussian Splatting</h1>
 <p><b>Code and reproduction instructions:</b>
-<span class="mono">github.com/maxtlee/GaussianSplatting</span>.
-A from-scratch implementation: 2D Gaussians with covariance built from
-scale/rotation, a differentiable front-to-back compositing rasterizer, adaptive
-densification, and 3D Gaussians projected through a pinhole camera.</p>
+<span class="mono">github.com/maxtlee/GaussianSplatting</span>.</p>
 
 <div class="note">
 <b>Reproducing.</b>
@@ -73,6 +70,26 @@ another checks a hand-computed two-Gaussian composite.</p>
 space, colors and opacities through a sigmoid, from the prescribed spread-out
 initialization. The reported PSNR is <i>&minus;10 log<sub>10</sub></i> of the
 exact full-image MSE. Details and the quality-vs-count study are in P5.</p>
+
+
+<figure>
+  <img src="assets/2d_coffee_4096.png" alt="4096-gaussian coffee">
+  <figcaption>4096-gaussian coffee fit (target / render / 4x error)</figcaption>
+</figure>
+
+
+<figure>
+  <img src="assets/2d_cat_4096.png" alt="4096-gaussian cat">
+  <figcaption>4096-gaussian cat fit (target / render / 4x error)</figcaption>
+</figure>
+
+
+
+<figure>
+  <img src="assets/2d_astronaut_4096.png" alt="4096-gaussian astronaut">
+  <figcaption>4096-gaussian astronaut fit (target / render / 4x error)</figcaption>
+</figure>
+
 
 <h2>P4. Densification (adaptive Gaussian count)</h2>
 <p><b>Score, split/clone, pruning.</b> Every 200 steps each Gaussian is scored
@@ -165,7 +182,7 @@ the training views without learning the scene.</p>
 </figure>
 
 <h2>P8. Densification in 3D</h2>
-<p><b>What changed, what stayed.</b> Positions and scales are 3D
+<p>Positions and scales are 3D
 (<span class="mono">mu</span> and <span class="mono">log_s</span> of shape
 (N, 3)); rotation is a quaternion (N, 4) that clone/split simply copy; the size
 threshold is in world units instead of pixels; the position-gradient score is
@@ -217,7 +234,7 @@ simplifications of this pipeline: a random (not SfM) initialization, a single
 global depth order rather than a per-pixel one, and view-independent color.</p>
 
 <h2>Additional experiment: is the memory batching safe?</h2>
-<p>The 4 GB GPU cannot hold the full <i>(pixels &times; Gaussians)</i> weight
+<p>My GTX 1050 Ti has 4 GB of VRAM so it cannot hold the full <i>(pixels &times; Gaussians)</i> weight
 tensor, so rendering is done in horizontal bands with a local-support cutoff.
 This must be a pure memory optimization. Retraining the same model under
 different band heights gives:</p>
@@ -240,10 +257,57 @@ bands exist. Disabling the 3.5&sigma; support cutoff entirely changes the
 held-out PSNR by 0.0002 dB. The batching therefore does not affect the end
 result.</p>
 
-<h2>Extension: Eiffel Tower from internet photos</h2>
-<p><i>In progress: 320 Commons photos, COLMAP SfM, RANSAC image selection, and
-lighting compensation before and during training. Results and the orbit GIF
-will be added here once the reconstruction finishes.</i></p>
+<h2>Extension: Eiffel Tower 3DGS from internet photos</h2>
+<p>320 Eiffel Tower photos were downloaded from Wikimedia Commons (freely
+licensed, credited in <span class="mono">eiffel/CREDITS.md</span>). COLMAP
+registered 215 of them (11,621 sparse points). A 3D-circle RANSAC over the camera
+centers was not confident (the views are not a clean ring), so a robust distance
+filter kept 196 views (172 train / 24 held-out). The photos span day, blue hour,
+night, clouds, and different cameras.</p>
+
+<p><b>Lighting / weather compensation, before and during training.</b> Before
+training, every image is affine-corrected per channel to match the dataset's
+median robust mean and standard deviation (a shared reference exposure and white
+balance). During training, a per-image per-channel gain and bias is optimized
+jointly with the Gaussians and applied to the render before the loss, so the
+Gaussians learn one canonical color while each image absorbs its own exposure. A
+Huber loss downweights mismatched pixels. Gaussians initialize at the SfM
+points.</p>
+
+<table>
+  <tr><th>compensation</th><th>train PSNR</th><th>held-out PSNR</th></tr>
+  <tr><td>none</td><td>13.44</td><td>11.64</td></tr>
+  <tr><td>before training</td><td>15.29</td><td>14.47</td></tr>
+  <tr><td>during training</td><td>13.37</td><td>11.89</td></tr>
+  <tr><td>both</td><td>15.03</td><td>14.22</td></tr>
+</table>
+<table>
+  <tr><th>Gaussians (both)</th><th>3000</th><th>6000</th><th>12000</th></tr>
+  <tr><td>train PSNR</td><td>15.25</td><td>15.03</td><td>14.77</td></tr>
+  <tr><td>held-out PSNR</td><td>14.33</td><td>14.22</td><td>14.42</td></tr>
+</table>
+
+<p>Pre-normalization gives the largest gain (+2.8 dB held-out); correcting during
+training alone adds little, and "both" is marginally worse than "pre" (the
+per-image parameters can absorb training idiosyncrasies at this budget). Gaussian
+count barely changes the result between 3000 and 12000, so the bottleneck is the
+reconstruction rather than capacity.</p>
+
+<p><b>Limitation.</b> Absolute quality is low — the render is a faint silhouette,
+not a crisp tower. SfM on a repetitive, symmetric landmark photographed across
+night and day is hard; 215 views with noisy sparse points over a 40-unit scene,
+1200 steps at 256 px, are far from converged. The value here is the end-to-end
+real-world pipeline and the compensation study; a larger, longer run is in
+progress.</p>
+
+<figure>
+  <img src="assets/eiffel_train.png" alt="Eiffel render">
+  <figcaption>Training view: target (top), render (bottom).</figcaption>
+</figure>
+<figure>
+  <img src="assets/eiffel_orbit_strip.png" alt="Eiffel orbit">
+  <figcaption>Frames from the 120-view orbit (<span class="mono">assets/eiffel_orbit.gif</span>).</figcaption>
+</figure>
 
 <h2>Conclusions</h2>
 <ul>

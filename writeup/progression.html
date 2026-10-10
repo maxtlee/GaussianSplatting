@@ -211,10 +211,64 @@ So the batching is an implementation detail, not a modeling choice.</p>
 downloaded from Wikimedia Commons (freely licensed; authors credited in
 <span class="mono">eiffel/CREDITS.md</span>) and reconstructed with COLMAP. The
 photographs have unknown poses, mixed exposures and weather, and include
-off-topic or unusable frames — so the pipeline adds structure-from-motion, a
-RANSAC selection of the consistent camera ring, and lighting compensation both
-before and during training. <i>In progress — results and the orbit GIF will be
-added here once the reconstruction finishes.</i></p>
+off-topic or unusable frames, so the pipeline adds structure-from-motion, a
+RANSAC selection of consistent viewpoints, and lighting compensation both before
+and during training.</p>
+
+<p>COLMAP registered 215 of the 320 photos (11,621 sparse points). A 3D-circle
+RANSAC over the camera centers was not confident — the viewpoints are not a
+clean ring — so a robust distance filter kept 196 views (172 train, 24
+held-out). The set spans bright day, blue hour, night illuminations, clouds, and
+different cameras, which is exactly the point.</p>
+
+<p>Two compensation strategies. <b>Before training</b>, every image is
+affine-corrected per channel so its robust mean and standard deviation match the
+dataset median — a shared reference exposure and white balance. <b>During
+training</b>, a per-image per-channel gain and bias is optimized jointly with the
+Gaussians and applied to the render before the loss, letting the Gaussians learn
+one canonical color while each image absorbs its own exposure. A Huber loss
+downweights badly exposed or mismatched pixels, and Gaussians start at the SfM
+points.</p>
+
+<table>
+  <tr><th>compensation</th><th>train PSNR</th><th>held-out PSNR</th></tr>
+  <tr><td>none</td><td>13.44</td><td>11.64</td></tr>
+  <tr><td>before training (color normalization)</td><td>15.29</td><td>14.47</td></tr>
+  <tr><td>during training (per-image gain/bias)</td><td>13.37</td><td>11.89</td></tr>
+  <tr><td>both</td><td>15.03</td><td>14.22</td></tr>
+</table>
+
+<table>
+  <tr><th>Gaussians (with both)</th><th>train PSNR</th><th>held-out PSNR</th></tr>
+  <tr><td>3000</td><td>15.25</td><td>14.33</td></tr>
+  <tr><td>6000</td><td>15.03</td><td>14.22</td></tr>
+  <tr><td>12000</td><td>14.77</td><td>14.42</td></tr>
+</table>
+
+<p>Pre-normalization is the dominant win (+2.8 dB held-out). Correcting during
+training alone barely helps, and "both" is slightly worse than "pre": with only
+1200 steps the per-image parameters absorb training-view idiosyncrasies instead
+of exposure. The Gaussian count barely matters between 3000 and 12000, so the
+bottleneck is the reconstruction, not capacity.</p>
+
+<p><b>Honest limitation.</b> Absolute quality is low (14–15 dB): the render is a
+faint tower silhouette, not a crisp reconstruction. Photos of a repetitive
+symmetric tower across night and day are a hard SfM and 3DGS problem; 215 views
+with noisy sparse points over a 40-unit scene leave much unconstrained, and 1200
+steps at 256 px is far from converged. A larger, longer run (25k Gaussians, 6000
+steps) is training to see how far it gets. The contribution here is the
+compensation study and the end-to-end pipeline, not a flawless tower.</p>
+
+<figure>
+  <img src="assets/eiffel_train.png" alt="Eiffel training view">
+  <figcaption>Eiffel training view: target (top) and the render (bottom) — a
+  faint silhouette at this budget.</figcaption>
+</figure>
+<figure>
+  <img src="assets/eiffel_orbit_strip.png" alt="Eiffel orbit">
+  <figcaption>Frames from the 120-view orbit around the reconstruction
+  (<span class="mono">assets/eiffel_orbit.gif</span>).</figcaption>
+</figure>
 
 <h2>Conclusions</h2>
 <ul>
