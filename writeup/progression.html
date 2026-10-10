@@ -86,6 +86,13 @@ mean squared error.</p>
   fits at their final count.</figcaption>
 </figure>
 
+<figure>
+  <img src="assets/training_curves.png" alt="2D training curves">
+  <figcaption>PSNR during optimization for the fixed 2D fits (color = target,
+  darker = N = 4096). All runs are still improving slowly at 2000 steps, so the
+  numbers are a snapshot rather than a converged ceiling.</figcaption>
+</figure>
+
 <p>Every target improves with more Gaussians, but the ordering is not simply
 "busier image, more Gaussians". The <i>astronaut</i> needs the most capacity: it
 is the worst at 256 (19.98 dB) and gains the most by 4096 (+11.1 dB), because it
@@ -95,6 +102,21 @@ almost all high-frequency fur yet scores highest at low counts (26.06 dB),
 because dense texture has a small per-pixel amplitude around a dominant local
 color, which blobs approximate well even when the fine detail is blurred.
 Structure (edges and contrast) matters as much as frequency content.</p>
+
+<figure>
+  <img src="assets/2d_coffee_4096.png" alt="coffee N=4096">
+  <figcaption>Coffee at N = 4096 (33.33 dB): target, render, amplified error.</figcaption>
+</figure>
+<figure>
+  <img src="assets/2d_astronaut_4096.png" alt="astronaut N=4096">
+  <figcaption>Astronaut at N = 4096 (31.09 dB). Edges remain the largest
+  error.</figcaption>
+</figure>
+<figure>
+  <img src="assets/2d_cat_4096.png" alt="cat N=4096">
+  <figcaption>Cat at N = 4096 (33.99 dB). The high-frequency detail is blurred
+  but the local color is matched.</figcaption>
+</figure>
 
 <h2>Growing the cloud</h2>
 <p>A fixed cloud spends the same capacity everywhere. Densification grows it
@@ -160,6 +182,17 @@ prevent, and pruning did not remove enough of them at this scale.</p>
   <img src="assets/3d_fixed_vs_densified.png" alt="fixed vs densified">
   <figcaption>Training and held-out PSNR for the fixed and densified sphere
   fits.</figcaption>
+</figure>
+
+<figure>
+  <img src="assets/3d_fixed_val000.png" alt="held-out fixed">
+  <figcaption>Held-out view 000, fixed N = 2500 (16.77 dB held-out).</figcaption>
+</figure>
+<figure>
+  <img src="assets/3d_densified_val000.png" alt="held-out densified">
+  <figcaption>The same held-out view from the densified fit (16.20 dB). The
+  densified cloud is not visibly cleaner: it adds detail to the training views
+  without clearing the held-out fog.</figcaption>
 </figure>
 
 <h3>Novel views</h3>
@@ -271,6 +304,13 @@ study and the end-to-end pipeline, not a flawless tower.</p>
   <figcaption>Frames from the 120-view orbit around the reconstruction
   (<span class="mono">assets/eiffel_orbit.gif</span>).</figcaption>
 </figure>
+
+<h2>Credits</h2>
+<p class="small">The 2D targets are from the scikit-image sample data (coffee and
+cat, CC0) and NASA (astronaut, public domain); the posed sphere scene is the
+provided synthetic dataset; the Eiffel Tower photographs are from Wikimedia
+Commons with per-file license and author in
+<span class="mono">eiffel/CREDITS.md</span>.</p>
 
 <h2>Conclusions</h2>
 <ul>

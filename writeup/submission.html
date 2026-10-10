@@ -40,6 +40,10 @@
 <span class="mono">python scripts/run_batching.py</span>;
 <span class="mono">python scripts/make_figures.py</span>.
 All runs are seeded and resumable.
+<br><b>Credits.</b> 2D targets: scikit-image sample data (coffee, cat, CC0) and
+NASA (astronaut, public domain); sphere scene: provided synthetic dataset;
+Eiffel photos: Wikimedia Commons, per-file credit in
+<span class="mono">eiffel/CREDITS.md</span>.
 </div>
 
 <h2>P1. 2D Gaussian and covariance from scale/rotation</h2>
@@ -130,6 +134,11 @@ reaches <b>30.74 dB</b> versus <b>28.42 dB</b> for a plain fixed fit at the same
   <figcaption>PSNR against N, one curve per target (log x-axis); stars are the
   densified fits.</figcaption>
 </figure>
+<figure>
+  <img src="assets/training_curves.png" alt="2D training curves">
+  <figcaption>PSNR during optimization for the fixed 2D fits (color = target,
+  darker = N = 4096). All runs are still improving slowly at 2000 steps.</figcaption>
+</figure>
 
 <p><b>Which images need more Gaussians.</b> <i>astronaut</i> needs the most: it
 is worst at N = 256 (19.98 dB) and gains 11.1 dB by N = 4096. It mixes smooth
@@ -178,7 +187,7 @@ to only about 16.5 dB in the first few hundred steps and then stops improving
 the training views without learning the scene.</p>
 <figure>
   <img src="assets/3d_training_curve.png" alt="3D curve">
-  <figcaption>Training and held-out PSNR over 5000 steps (N = 4000).</figcaption>
+  <figcaption>Training and held-out PSNR over 4000 steps (N = 4000).</figcaption>
 </figure>
 
 <h2>P8. Densification in 3D</h2>
