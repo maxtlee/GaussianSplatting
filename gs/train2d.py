@@ -23,10 +23,10 @@ def psnr_from_mse(mse):
 
 
 @torch.no_grad()
-def render_psnr(cloud, target, band=None):
+def render_psnr(cloud, target, band=None, cutoff=3.5):
     """Render the full image at no grad and return ``(image, psnr)``."""
     H, W = target.shape[:2]
-    img = render_cloud_2d(cloud, H, W, band=band)
+    img = render_cloud_2d(cloud, H, W, band=band, cutoff=cutoff)
     mse = ((img - target.to(img.device)) ** 2).mean()
     return img, psnr_from_mse(mse)
 
@@ -42,6 +42,7 @@ def fit_2d(
     densify=None,
     log_every=50,
     verbose=False,
+    cutoff=3.5,
 ):
     """Fit ``target`` (H, W, 3) in [0, 1] with 2D Gaussians.
 
@@ -79,7 +80,9 @@ def fit_2d(
         for lo in range(0, P, band):
             hi = min(lo + band, P)
             r_lo, r_hi = lo // W, (hi - 1) // W
-            C = render_chunk_2d(coords[lo:hi], r_lo + 0.5, r_hi + 0.5, cloud)
+            C = render_chunk_2d(
+                coords[lo:hi], r_lo + 0.5, r_hi + 0.5, cloud, cutoff=cutoff
+            )
             mse = ((C - tgt[lo:hi]) ** 2).mean()
             term = mse * (hi - lo) / P
             if term.requires_grad:  # empty bands contribute no gradient

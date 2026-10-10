@@ -11,11 +11,11 @@ from .train2d import auto_band, psnr_from_mse
 
 
 @torch.no_grad()
-def evaluate(cloud, cams, band=None, return_images=False):
+def evaluate(cloud, cams, band=None, return_images=False, cutoff=3.5):
     """Render every camera and return ``(psnrs, images)``."""
     psnrs, images = [], []
     for cam in cams:
-        img = render_cloud_3d(cloud, cam, band=band)
+        img = render_cloud_3d(cloud, cam, band=band, cutoff=cutoff)
         mse = ((img - cam.image.to(img.device)) ** 2).mean()
         psnrs.append(psnr_from_mse(mse))
         if return_images:
@@ -35,6 +35,9 @@ def fit_3d(
     log_every=50,
     verbose=False,
     cam_seed=0,
+    eval_every=0,
+    eval_sets=None,
+    cutoff=3.5,
 ):
     """Fit 3D Gaussians to posed ``train_cams`` (each with an RGB target).
 
@@ -72,7 +75,9 @@ def fit_3d(
         for lo in range(0, P, band):
             hi = min(lo + band, P)
             r_lo, r_hi = lo // W, (hi - 1) // W
-            C = render_chunk_3d(xy[lo:hi], r_lo + 0.5, r_hi + 0.5, cloud, cam)
+            C = render_chunk_3d(
+                xy[lo:hi], r_lo + 0.5, r_hi + 0.5, cloud, cam, cutoff=cutoff
+            )
             mse = ((C - tgt[lo:hi]) ** 2).mean()
             term = mse * (hi - lo) / P
             if term.requires_grad:  # empty bands contribute no gradient
@@ -84,14 +89,38 @@ def fit_3d(
         since += 1
         opt.step(cloud.params())
 
-        if log_every and (step % log_every == 0 or step == steps - 1):
-            psnr = psnr_from_mse(loss)
+        sample_psnr = psnr_from_mse(loss)
+        if eval_every and eval_sets and (
+            step % eval_every == 0 or step == steps - 1
+        ):
+            rec = {
+                "step": step,
+                "n": cloud.n,
+                "sample_psnr": sample_psnr,
+                "loss": loss,
+            }
+            for name, cams in eval_sets.items():
+                ps, _ = evaluate(cloud, cams)
+                rec[name] = float(sum(ps) / len(ps))
+            history.append(rec)
+            if verbose:
+                msg = "  ".join(
+                    f"{k}={rec[k]:.2f}" for k in eval_sets
+                )
+                print(f"step {step:5d}  n={cloud.n:5d}  {msg}")
+        elif log_every and (step % log_every == 0 or step == steps - 1):
             history.append(
-                {"step": step, "psnr": psnr, "loss": loss, "n": cloud.n}
+                {
+                    "step": step,
+                    "psnr": sample_psnr,
+                    "loss": loss,
+                    "n": cloud.n,
+                }
             )
             if verbose:
                 print(
-                    f"step {step:5d}  n={cloud.n:5d}  psnr={psnr:6.2f}  loss={loss:.3e}"
+                    f"step {step:5d}  n={cloud.n:5d}  psnr={sample_psnr:6.2f}  "
+                    f"loss={loss:.3e}"
                 )
 
         if (

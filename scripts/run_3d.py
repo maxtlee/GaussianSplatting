@@ -89,6 +89,12 @@ def main():
     )
     ap.add_argument("--out", default=str(ROOT / "experiments" / "3d"))
     ap.add_argument("--device", default="auto", choices=["auto", "cuda", "cpu"])
+    ap.add_argument(
+        "--eval-every",
+        type=int,
+        default=0,
+        help="evaluate train/val PSNR every N steps (0 = off)",
+    )
     ap.add_argument("--force", action="store_true")
     args = ap.parse_args()
 
@@ -119,6 +125,7 @@ def main():
         )
 
     t0 = time.time()
+    eval_sets = {"train": train, "val": val} if args.eval_every else None
     cloud, history = fit_3d(
         train,
         n=args.n,
@@ -127,6 +134,8 @@ def main():
         device=device,
         densify=densify,
         log_every=50,
+        eval_every=args.eval_every,
+        eval_sets=eval_sets,
     )
     train_psnr, _ = evaluate(cloud, train)
     val_psnr, val_imgs = evaluate(cloud, val, return_images=True)
