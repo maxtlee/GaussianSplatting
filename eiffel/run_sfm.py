@@ -107,16 +107,27 @@ def main():
     print("incremental mapping ...", flush=True)
     t2 = time.time()
     reconstructions = pycolmap.incremental_mapping(db, RAW, OUT)
-    if not reconstructions:
+    recs = list(reconstructions.values())
+    if not recs:
+        # incremental_mapping persists models to OUT/<id>/; reload them so a
+        # later export does not require re-running the mapper.
+        for d in sorted(OUT.iterdir()):
+            if d.is_dir():
+                try:
+                    recs.append(pycolmap.Reconstruction(str(d)))
+                except Exception:  # noqa: BLE001
+                    pass
+    if not recs:
         print("no reconstruction produced")
         return
-    rec = max(reconstructions.values(), key=lambda r: r.num_reg_images())
+    rec = max(recs, key=lambda r: r.num_reg_images())
     print(
-        f"  {len(reconstructions)} models; best registered "
+        f"  {len(recs)} models; best registered "
         f"{rec.num_reg_images()} images / {rec.num_points3D()} points "
         f"in {time.time()-t2:.0f}s",
         flush=True,
     )
+    (OUT / "reconstruction").mkdir(parents=True, exist_ok=True)
     rec.write(OUT / "reconstruction")
     export_reconstruction(rec, OUT / "cameras.json")
     print("wrote", OUT / "cameras.json")

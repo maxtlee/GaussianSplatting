@@ -35,36 +35,49 @@ def camera_center(R, t):
     return -np.asarray(R).T @ np.asarray(t)
 
 
-def circumcircle(a, b, c):
-    ax, ay = a
-    bx, by = b
-    cx, cy = c
-    d = 2 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by))
-    if abs(d) < 1e-9:
+def circle_from_3pts(a, b, c):
+    """Circumcenter, unit normal, and radius of the circle through three 3D points."""
+    u, v = b - a, c - a
+    n = np.cross(u, v)
+    nn = np.linalg.norm(n)
+    if nn < 1e-9:
         return None
-    ux = ((ax**2 + ay**2) * (by - cy) + (bx**2 + by**2) * (cy - ay)
-          + (cx**2 + cy**2) * (ay - by)) / d
-    uy = ((ax**2 + ay**2) * (cx - bx) + (bx**2 + by**2) * (ax - cx)
-          + (cx**2 + cy**2) * (bx - ax)) / d
-    r = math.hypot(ax - ux, ay - uy)
-    return ux, uy, r
+    e1 = u / np.linalg.norm(u)
+    v_perp = v - (v @ e1) * e1
+    if np.linalg.norm(v_perp) < 1e-9:
+        return None
+    e2 = v_perp / np.linalg.norm(v_perp)
+    u1 = np.linalg.norm(u)
+    cx, cy = v @ e1, v @ e2
+    denom = 2 * (u1 * cy)
+    if abs(denom) < 1e-9:
+        return None
+    o1 = u1 / 2
+    o2 = (cx * cx + cy * cy - cx * u1) / (2 * cy)
+    center = a + o1 * e1 + o2 * e2
+    radius = math.hypot(o1, o2)
+    return center, n / nn, radius
 
 
-def ransac_circle(pts2d, thresh, iters=3000, seed=0):
-    """RANSAC circle fit; returns (inlier mask, (cx, cy, r))."""
+def ransac_circle_3d(pts, thresh, iters=4000, seed=0):
+    """RANSAC a 3D circle through camera centers; returns (inlier mask, model)."""
     rng = np.random.default_rng(seed)
-    n = len(pts2d)
+    n = len(pts)
     best_mask, best_model = np.ones(n, bool), None
     if n < 3:
         return best_mask, None
+    scale = np.median(np.linalg.norm(pts - pts.mean(0), axis=1)) + 1e-9
     for _ in range(iters):
-        idx = rng.choice(n, 3, replace=False)
-        model = circumcircle(pts2d[idx[0]], pts2d[idx[1]], pts2d[idx[2]])
+        i, j, k = rng.choice(n, 3, replace=False)
+        model = circle_from_3pts(pts[i], pts[j], pts[k])
         if model is None:
             continue
-        cx, cy, r = model
-        dist = np.abs(np.hypot(pts2d[:, 0] - cx, pts2d[:, 1] - cy) - r)
-        mask = dist < thresh
+        center, normal, radius = model
+        v = pts - center
+        d_along = v @ normal
+        d_perp = np.linalg.norm(v - np.outer(d_along, normal), axis=1)
+        resid = np.sqrt((d_perp - radius) ** 2 + d_along ** 2)
+        mask = resid < thresh * scale
         if mask.sum() > best_mask.sum():
             best_mask, best_model = mask, model
     return best_mask, best_model
@@ -85,7 +98,8 @@ def color_stats(img):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--min-observations", type=int, default=50)
-    ap.add_argument("--circle-thresh", type=float, default=0.15)
+    ap.add_argument("--circle-thresh", type=float, default=0.25)
+    ap.add_argument("--dist-mad", type=float, default=3.0)
     ap.add_argument("--max-side", type=int, default=640)
     ap.add_argument("--val-fraction", type=float, default=0.12)
     ap.add_argument("--normalize", action="store_true",
@@ -104,16 +118,25 @@ def main():
     print(f"after observation filter (>={args.min_observations} points): {len(kept)}")
 
     centers = np.array([camera_center(f["R_wc"], f["t"]) for f in kept])
-    # Assume the reconstruction is gravity-aligned (COLMAP uses EXIF gravity),
-    # so the horizontal plane is (x, z).
-    pts2d = centers[:, [0, 2]]
-    mask, model = ransac_circle(pts2d, args.circle_thresh, seed=args.seed)
+    mask, model = ransac_circle_3d(
+        centers, args.circle_thresh, seed=args.seed
+    )
     if model is not None and mask.sum() >= max(12, 0.3 * len(kept)):
         kept = [f for f, m in zip(kept, mask) if m]
         print(f"after RANSAC ring selection: {len(kept)}  "
-              f"(center=({model[0]:.2f},{model[1]:.2f}) r={model[2]:.2f})")
+              f"(radius={model[2]:.2f})")
     else:
-        print("RANSAC ring not confident; keeping all observation-filtered frames")
+        # Robust fallback: drop cameras whose distance from the centroid is a
+        # strong outlier (extreme close-ups or far views).
+        c = centers.mean(0)
+        dist = np.linalg.norm(centers - c, axis=1)
+        med = np.median(dist)
+        mad = np.median(np.abs(dist - med)) + 1e-9
+        mask = np.abs(dist - med) < args.dist_mad * mad
+        filtered = [f for f, m in zip(kept, mask) if m]
+        if len(filtered) >= max(12, 0.3 * len(kept)):
+            kept = filtered
+        print(f"RANSAC circle not confident; distance filter kept {len(kept)}")
 
     rng = np.random.default_rng(args.seed)
     order = rng.permutation(len(kept))
@@ -176,7 +199,7 @@ def main():
         "normalize": args.normalize,
         "target_mean": target_mean.tolist(),
         "target_std": target_std.tolist(),
-        "extent": points.ptp(axis=0).tolist(),
+        "extent": np.ptp(points, axis=0).tolist(),
         "center": points.mean(axis=0).tolist(),
     }
     (proc / "cameras.json").write_text(json.dumps({"frames": records, "meta": meta},
