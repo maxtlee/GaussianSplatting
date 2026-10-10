@@ -46,7 +46,7 @@ def project_gaussian(mu3, Sigma3, R_wc, t, K):
     """
     mu_cam = mu3 @ R_wc.T + t
     xc, yc, zc = mu_cam[:, 0], mu_cam[:, 1], mu_cam[:, 2]
-    z = zc.clamp(min=1e-4)
+    z = zc.clamp(min=1e-2)
     fx, fy = K[0, 0], K[1, 1]
     cx, cy = K[0, 2], K[1, 2]
 
@@ -60,6 +60,10 @@ def project_gaussian(mu3, Sigma3, R_wc, t, K):
 
     Sigma_cam = R_wc @ Sigma3 @ R_wc.transpose(-1, -2)
     Sigma2 = J @ Sigma_cam @ J.transpose(-1, -2)
+    # Near/behind the camera the perspective divide blows up; those Gaussians
+    # are masked to zero opacity, but keep the tensors finite so they cannot
+    # poison the whole render with NaNs.
+    Sigma2 = torch.nan_to_num(Sigma2, nan=0.0, posinf=0.0, neginf=0.0)
     return mu2, Sigma2, zc
 
 

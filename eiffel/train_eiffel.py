@@ -57,13 +57,22 @@ def estimate_scale(mu):
     return float(d.min(dim=1).values.median()) * 0.5
 
 
-def build_cloud(pts, cols, n, device, seed=0):
-    if len(pts) > n:
-        rng = np.random.default_rng(seed)
-        idx = rng.choice(len(pts), n, replace=False)
-        pts, cols = pts[idx], cols[idx]
-    mu = torch.tensor(pts, dtype=torch.float32, device=device).requires_grad_(True)
-    scale = max(estimate_scale(mu.detach()), 1e-5)
+def build_cloud(pts, cols, n, device, seed=0, init_scale_frac=0.003):
+    rng = np.random.default_rng(seed)
+    n_points = len(pts)
+    if n <= n_points:
+        idx = rng.choice(n_points, n, replace=False)
+    else:
+        # Fewer SfM points than requested Gaussians: resample with replacement
+        # and jitter, so the Gaussian count is a free parameter.
+        idx = rng.choice(n_points, n, replace=True)
+    pts, cols = pts[idx], cols[idx]
+    mu = torch.tensor(pts, dtype=torch.float32, device=device)
+    max_extent = float(np.ptp(pts, axis=0).max())
+    scale = max(estimate_scale(mu.detach()), init_scale_frac * max_extent, 1e-6)
+    if n > n_points:
+        mu = mu + torch.randn_like(mu) * scale * 0.3
+    mu = mu.detach().clone().requires_grad_(True)
     n_pts = mu.shape[0]
     log_s = torch.full((n_pts, 3), np.log(scale), device=device, requires_grad=True)
     quat = torch.zeros(n_pts, 4, device=device)
@@ -106,8 +115,11 @@ def train(args):
     val_cams = [c for c, s in all_cams if s == "val"]
     print(f"train {len(train_cams)}  val {len(val_cams)}  points {len(pts)}")
 
-    cloud = build_cloud(pts, cols, args.n, device, seed=args.seed)
-    print(f"Gaussians {cloud.n}  init scale {float(cloud.scale().mean()):.5f}")
+    cloud = build_cloud(
+        pts, cols, args.n, device, seed=args.seed,
+        init_scale_frac=args.init_scale_frac,
+    )
+    print(f"Gaussians {cloud.n}  init scale {float(cloud.scale().detach().mean()):.5f}")
     opt = AdamStore(cloud.params(), lr=args.lr)
 
     n_cams = len(all_cams)
@@ -214,7 +226,8 @@ def main():
     ap.add_argument("--tag", default="baseline")
     ap.add_argument("--n", type=int, default=30000)
     ap.add_argument("--steps", type=int, default=3000)
-    ap.add_argument("--lr", type=float, default=1.6e-4)
+    ap.add_argument("--lr", type=float, default=1e-2)
+    ap.add_argument("--init-scale-frac", type=float, default=0.003)
     ap.add_argument("--app-lr", type=float, default=1e-3)
     ap.add_argument("--appearance", choices=["none", "train"], default="none")
     ap.add_argument("--loss", choices=["mse", "huber"], default="mse")

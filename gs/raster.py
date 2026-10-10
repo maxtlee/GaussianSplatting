@@ -116,8 +116,12 @@ def _project_ordered_3d(cloud, cam):
     """Project every 3D Gaussian and return them in front-to-back order."""
     Sig3 = covariance_3d(cloud.scale(), cloud.quaternion())
     mu2, Sig2, depth = project_gaussian(cloud.mu, Sig3, cam.R, cam.t, cam.K)
-    # Drop primitives behind the camera by giving them zero opacity.
-    opacity = cloud.opacity() * (depth > 1e-4).to(cloud.mu.dtype)
+    # Drop primitives behind (or essentially at) the camera: zero opacity and
+    # zero covariance, so the huge projected extent of a near-plane Gaussian
+    # cannot make it a candidate for every band.
+    valid = (depth > 1e-2).to(cloud.mu.dtype)
+    opacity = cloud.opacity() * valid
+    Sig2 = Sig2 * valid[:, None, None]
     order = torch.argsort(depth)
     return mu2[order], Sig2[order], cloud.color()[order], opacity[order]
 
