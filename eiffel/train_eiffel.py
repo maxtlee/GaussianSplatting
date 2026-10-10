@@ -186,8 +186,8 @@ def train(args):
             app_opt.step()
 
         if step % args.eval_every == 0 or step == args.steps - 1:
-            tr = evaluate(train_cams[::4], use_appearance=False)
-            va = evaluate(val_cams, use_appearance=False)
+            tr = evaluate(train_cams[::8], use_appearance=False)
+            va = evaluate(val_cams[::2], use_appearance=False)
             history.append({"step": step, "n": cloud.n, "loss": total,
                             "train_psnr": tr, "val_psnr": va})
             print(f"step {step:5d} n={cloud.n:6d} loss={total:.4e} "
@@ -239,7 +239,7 @@ def main():
     ap.add_argument("--band", type=int, default=0)
     ap.add_argument("--bands", type=int, default=16,
                     help="number of horizontal bands per image (when --band=0)")
-    ap.add_argument("--eval-every", type=int, default=250)
+    ap.add_argument("--eval-every", type=int, default=200)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--densify", action="store_true")
     ap.add_argument("--densify-every", type=int, default=500)
