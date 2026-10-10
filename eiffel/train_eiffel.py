@@ -199,9 +199,14 @@ def train(args):
 def make_orbit(cloud, train_cams, meta, device, width=240, height=340):
     center = torch.tensor(meta["center"], dtype=torch.float32, device=device)
     extent = np.asarray(meta["extent"], dtype=float)
-    radius = float(max(extent[0], extent[2]) * 1.4 + extent[1] * 0.2)
-    cam_y = float(center[1] + 0.15 * extent[1])
-    target = center + torch.tensor([0.0, 0.1 * extent[1], 0.0], device=device)
+    # Frame the orbit like the training views: median camera distance and
+    # height, rather than the point cloud's extent (which includes the ground).
+    with torch.no_grad():
+        C = torch.stack([-(cam.R.T @ cam.t) for cam in train_cams])
+        dist = (C - center).norm(dim=1)
+        radius = float(dist.median()) * 1.1
+        cam_y = float(C[:, 1].median())
+    target = center + torch.tensor([0.0, 0.15 * extent[1], 0.0], device=device)
     K = torch.tensor(
         [[0.9 * width, 0, width / 2], [0, 0.9 * width, height / 2], [0, 0, 1]],
         dtype=torch.float32, device=device,
