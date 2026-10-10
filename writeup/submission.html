@@ -295,10 +295,11 @@ reconstruction rather than capacity.</p>
 
 <p><b>Limitation.</b> Absolute quality is low — the render is a faint silhouette,
 not a crisp tower. SfM on a repetitive, symmetric landmark photographed across
-night and day is hard; 215 views with noisy sparse points over a 40-unit scene,
-1200 steps at 256 px, are far from converged. The value here is the end-to-end
-real-world pipeline and the compensation study; a larger, longer run is in
-progress.</p>
+night and day is hard; 215 views with noisy sparse points over a 40-unit scene.
+A longer run (12k Gaussians, 3000 steps) reached 15.23 / 14.26 dB — essentially
+unchanged from 1200 steps and from the 3000- and 6000-Gaussian runs, confirming
+the reconstruction is the bottleneck rather than the training budget. The value
+here is the end-to-end real-world pipeline and the compensation study.</p>
 
 <figure>
   <img src="assets/eiffel_train.png" alt="Eiffel render">

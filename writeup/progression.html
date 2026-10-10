@@ -255,9 +255,11 @@ bottleneck is the reconstruction, not capacity.</p>
 faint tower silhouette, not a crisp reconstruction. Photos of a repetitive
 symmetric tower across night and day are a hard SfM and 3DGS problem; 215 views
 with noisy sparse points over a 40-unit scene leave much unconstrained, and 1200
-steps at 256 px is far from converged. A larger, longer run (25k Gaussians, 6000
-steps) is training to see how far it gets. The contribution here is the
-compensation study and the end-to-end pipeline, not a flawless tower.</p>
+steps at 256 px is far from converged. A longer run (12k Gaussians, 3000 steps)
+reached 15.23 dB train / 14.26 dB held-out — essentially unchanged from 1200
+steps and from the 3000- and 6000-Gaussian runs, so the reconstruction, not the
+training budget, is the bottleneck. The contribution here is the compensation
+study and the end-to-end pipeline, not a flawless tower.</p>
 
 <figure>
   <img src="assets/eiffel_train.png" alt="Eiffel training view">
